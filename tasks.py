@@ -59,14 +59,18 @@ def test(only=None, sdist=False):
     if not files: sys.exit(f"no {'sdist' if sdist else pattern} in dist/; run `uv run tasks.py build{' --sdist' if sdist else ''}` first")
     envs = [e for e in environments() if not only or e[0] in only]
     if sdist: envs = envs[:1]
+    before = {f.name: sha256(f) for f in files}
     for f in files:
         for name, python, pins in envs:
             print(f"# {f.name}: {name}", flush=True)
             with_ = [a for p in pins for a in ("--with", p)]
             run("uv", "run", "--isolated", "--no-project", "-p", python, "--refresh-package", "lgbmjit",
                 "--with", f"lgbmjit[test] @ {f.resolve().as_uri()}", *with_, "pytest", "-q", "tests")
+    # hashes from before the tests: code run by the tests, such as a dependency, must not alter what gets recorded
+    changed = [n for n, h in before.items() if sha256(DIST / n) != h]
+    if changed: sys.exit(f"changed during testing: {', '.join(changed)}")
     tag = "sdist" if sdist else f"{platform.system()}-{platform.machine()}".lower()
-    record = dict(files={f.name: sha256(f) for f in files}, environments=[e[0] for e in envs], machine=platform.platform())
+    record = dict(files=before, environments=[e[0] for e in envs], machine=platform.platform())
     (DIST / f"tested-{tag}.json").write_text(json.dumps(record, indent=1))
 
 

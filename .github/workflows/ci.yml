@@ -1,5 +1,7 @@
 # Builds and tests on every push to main and every pull request. The steps only install tools, keep caches and
-# store dist/; tasks.py does the work. release.yml publishes the stored dist/ of a tagged commit.
+# move files; tasks.py does the work. Building and testing run in separate jobs: the test jobs, which install the
+# newest dependencies from PyPI, can only read the uploaded builds, never change them. release.yml publishes the
+# builds and test records of a tagged commit.
 name: CI
 
 on:
@@ -11,13 +13,12 @@ on:
 permissions:
   contents: read
 
-env:
-  RUSTC_WRAPPER: sccache
-  SCCACHE_GHA_ENABLED: "true"
-
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,14 +33,23 @@ jobs:
           enable-cache: true
       - run: uv run tasks.py check
 
-  wheels:
-    name: wheels (${{ matrix.os }})
+  build:
+    name: build (${{ matrix.name }})
     needs: check
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm }
+          - { name: macos-arm64, os: macos-latest }
+          - { name: windows-x86_64, os: windows-latest }
+          - { name: sdist, os: ubuntu-latest, args: --sdist }
+    env:
+      ARGS: ${{ matrix.args }}
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,37 +61,54 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
-      # LightGBM's macOS wheel, a test dependency, needs the OpenMP runtime
-      - if: runner.os == 'macOS'
-        run: brew install libomp
-      - run: uv run tasks.py build
-      - run: uv run tasks.py test
+      - run: uv run tasks.py build ${ARGS:+"$ARGS"}
+        shell: bash
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dist-${{ matrix.os }}
+          name: dist-${{ matrix.name }}
           path: dist
           retention-days: 90
           if-no-files-found: error
 
-  sdist:
-    needs: check
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.name }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm }
+          - { name: macos-arm64, os: macos-latest }
+          - { name: windows-x86_64, os: windows-latest }
+          - { name: sdist, os: ubuntu-latest, args: --sdist }
+    env:
+      ARGS: ${{ matrix.args }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      # the sdist test builds lgbmjit from source
+      - if: matrix.name == 'sdist'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      # LightGBM's macOS wheel, a test dependency, needs the OpenMP runtime
+      - if: runner.os == 'macOS'
+        run: brew install libomp
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
-      - run: uv run tasks.py build --sdist
-      - run: uv run tasks.py test --sdist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-${{ matrix.name }}
+          path: dist
+      - run: uv run tasks.py test ${ARGS:+"$ARGS"}
+        shell: bash
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dist-sdist
-          path: dist
+          name: tested-${{ matrix.name }}
+          path: dist/tested-*.json
           retention-days: 90
           if-no-files-found: error
