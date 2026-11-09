@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check
+        name: uv run tasks.py check
+        entry: uv run tasks.py check
+        language: system
+        pass_filenames: false
+        always_run: true
