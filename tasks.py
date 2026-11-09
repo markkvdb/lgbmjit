@@ -25,9 +25,9 @@ def run(*cmd):
 
 
 def check():
-    run("uv", "run", "--extra", "dev", "cargo", "fastfmt", "--check")
-    run("uv", "run", "--extra", "dev", "chkstyle")
-    run("uv", "run", "--extra", "dev", "--extra", "test", "pyright", "python")
+    # the Python-side tools only read sources: install them from the lock without building the package
+    run("uv", "sync", "--inexact", "--no-install-project", "--extra", "dev", "--extra", "test")
+    for tool in (["cargo", "fastfmt", "--check"], ["chkstyle"], ["pyright", "python"]): run("uv", "run", "--no-sync", *tool)
     run("cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings")
     run("cargo", "test", "--workspace")
 

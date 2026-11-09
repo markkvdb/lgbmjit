@@ -1,0 +1,2 @@
+# LightGBM cannot read model files with CRLF line endings; keep them byte for byte on every platform
+tests/models/** -text

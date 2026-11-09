@@ -41,3 +41,4 @@ testpaths = ["tests"]
 
 [tool.pyright]
 include = ["python"]
+extraPaths = ["python"]
