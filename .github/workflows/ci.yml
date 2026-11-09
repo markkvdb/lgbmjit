@@ -78,10 +78,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # the dependency floors are tested once, on Linux x86-64; the other platforms test the newest versions
           - { name: linux-x86_64, os: ubuntu-latest }
-          - { name: linux-aarch64, os: ubuntu-24.04-arm }
-          - { name: macos-arm64, os: macos-latest }
-          - { name: windows-x86_64, os: windows-latest }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, args: --only=newest }
+          - { name: macos-arm64, os: macos-latest, args: --only=newest }
+          - { name: windows-x86_64, os: windows-latest, args: --only=newest }
           - { name: sdist, os: ubuntu-latest, args: --sdist }
     env:
       ARGS: ${{ matrix.args }}
