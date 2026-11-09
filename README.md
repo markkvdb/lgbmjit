@@ -68,6 +68,8 @@ uv run release.py v0.2.0 --check   # check dist/ for that release; without --che
 
 To release, push a tag such as `v0.2.0` on a commit of `main` whose CI run passed, then bump the version in `Cargo.toml` to the next one. The release workflow builds nothing. It fetches the files that CI built and tested for that commit, checks them with `release.py` and publishes them to PyPI. If that build has expired, the workflow stops and asks you to re-run the commit's CI run.
 
+On macOS, the tests need the OpenMP runtime that LightGBM loads: `brew install libomp`.
+
 The Rust core in `crates/lgbmjit-core` has no Python dependency. `crates/lgbmjit-python` holds the bindings and `python/lgbmjit` the Python API.
 
 ## Credits
